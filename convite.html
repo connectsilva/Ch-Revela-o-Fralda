@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Convidados - Chá Revelação</title>
+    <!-- Biblioteca para gerar QR Code -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Biblioteca para ler QR Code pela Câmera -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- SDKs do Firebase (App e Realtime Database) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background-color: #1e293b;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+            border: 1px solid #334155;
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+            position: relative;
+        }
+
+        .settings-trigger {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background: none;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 5px;
+            transition: color 0.2s, transform 0.3s;
+        }
+        .settings-trigger:hover {
+            color: #f8fafc;
+            transform: rotate(45deg);
+        }
+
+        h1 {
+            color: #f8fafc;
+            margin-bottom: 5px;
+            font-size: 26px;
+            font-weight: 800;
+            padding-right: 40px;
+            text-align: left;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            margin-top: 0;
+            margin-bottom: 25px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        .input-box {
+            background-color: #0f172a;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            margin-bottom: 20px;
+            text-align: left;
+            overflow: hidden;
+        }
+
+        .input-box-header {
+            padding: 15px;
+            background-color: #131c2e;
+            color: #f8fafc;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+
+        .input-box-content {
+            padding: 15px;
+            display: none;
+            border-top: 1px solid #334155;
+        }
+
+        .input-box label {
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        input[type="text"], input[type="tel"], input[type="password"], input[type="email"], textarea {
+            flex: 1;
+            padding: 12px;
+            background-color: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 10px;
+            font-size: 15px;
+            color: #f8fafc;
+            outline: none;
+            transition: all 0.3s;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus, input[type="tel"]:focus, input[type="password"]:focus, input[type="email"]:focus, textarea:focus {
+            border-color: #64748b;
+        }
+
+        textarea {
+            width: 100%;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        button {
+            background: #e2e8f0;
+            color: #0f172a;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover { background: #f1f5f9; }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .group-card {
+            background-color: #334155;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            padding: 12px 15px;
+            text-align: left;
+            border-left: 4px solid #64748b;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        
+        .group-card:active { transform: scale(0.99); }
+
+        .group-card.status-confirmado { border-left-color: #3b82f6; } 
+        .group-card.status-liberado { border-left-color: #22c55e; } 
+        .group-card.status-recusado { border-left-color: #ef4444; opacity: 0.8; }
+
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            color: #f8fafc;
+        }
+
+        .sub-guests {
+            margin-top: 10px;
+            padding-left: 10px;
+            font-size: 14px;
+            color: #cbd5e1;
+            border-top: 1px dashed #475569;
+            padding-top: 8px;
+            display: none;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .action-icon {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px;
+        }
+        .action-icon:hover { color: #f8fafc; }
+        .whatsapp-icon:hover { color: #22c55e; }
+        .delete-icon:hover { color: #ef4444; }
+
+        .counter {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #94a3b8;
+            font-weight: bold;
+            border-top: 1px solid #334155;
+            padding-top: 15px;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .modal-panel { text-align: left; display: none; }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 { margin: 0; color: #f8fafc; font-size: 20px; }
+
+        .setting-row {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+            border: 1px solid #334155;
+        }
+
+        .setting-row h4 { margin: 0 0 5px 0; color: #f8fafc; }
+        .setting-row p { margin: 0 0 12px 0; color: #94a3b8; font-size: 13px; }
+
+        /* Estilos da senha com botão de olho */
+        .password-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        .password-wrapper input {
+            padding-right: 45px;
+        }
+        .toggle-password-btn {
+            position: absolute;
+            right: 10px;
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+        }
+
+        /* Estilo do container Lembrar-me */
+        .remember-me-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            margin-bottom: 15px;
+            color: #94a3b8;
+            font-size: 14px;
+            user-select: none;
+            cursor: pointer;
+        }
+        .remember-me-container input {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+
+        .danger-btn { background-color: #ef4444; color: white; width: 100%; }
+        .danger-btn:hover { background-color: #dc2626; }
+        .secondary-btn { background-color: #475569; color: white; }
+        .secondary-btn:hover { background-color: #64748b; }
+        .success-btn { background-color: #22c55e; color: white; width: 100%; }
+        .success-btn:hover { background-color: #16a34a; }
+
+        .guest-mode-box {
+            background: #0f172a;
+            border: 2px dashed #64748b;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            color: white;
+            text-align: left;
+        }
+
+        .btn-container { display: flex; gap: 12px; margin-top: 15px; width: 100%; }
+        .btn-confirm { flex: 1; background-color: #3b82f6; color: white; padding: 14px 10px; border-radius: 10px; }
+        .btn-confirm:hover { background-color: #2563eb; }
+        .btn-decline { flex: 1; background-color: #ef4444; color: white; padding: 14px 10px; border-radius: 10px; }
+        .btn-decline:hover { background-color: #dc2626; }
+
+        .qr-display-container {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px auto;
+            width: 180px;
+            height: 180px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #reader {
+            width: 100%;
+            background: #0f172a;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #334155 !important;
+        }
+
+        .scan-result-card { text-align: center; padding: 10px 5px; }
+        .scan-result-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        .badge-success { background-color: #22c55e; color: white; }
+        .badge-warning { background-color: #eab308; color: #0f172a; }
+        .badge-danger { background-color: #ef4444; color: white; }
+        
+        .scan-result-title { color: #f8fafc; margin: 0 0 10px 0; font-size: 20px; }
+        .scan-result-list {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 12px;
+            text-align: left;
+            margin-bottom: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .scan-result-item { color: #cbd5e1; font-size: 15px; margin-bottom: 6px; }
+
+        /* Estilos específicos para os novos blocos de Ausência */
+        .absence-section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: left;
+        }
+        .absence-section h4 { margin: 0 0 8px 0; color: #f8fafc; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+        .absence-section p { margin: 0 0 10px 0; color: #94a3b8; font-size: 13px; line-height: 1.4; }
+        
+        .pix-container {
+            display: flex;
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 8px;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid #475569;
+            margin-top: 5px;
+        }
+        .pix-key { font-family: monospace; color: #3b82f6; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%; }
+        
+        .vote-container { display: flex; gap: 10px; margin-top: 8px; }
+        .vote-btn {
+            flex: 1;
+            background: #0f172a;
+            border: 2px solid #334155;
+            color: #cbd5e1;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .vote-btn.selected-menino { background: #1e3a8a; border-color: #3b82f6; color: white; }
+        .vote-btn.selected-menina { background: #581c87; border-color: #a855f7; color: white; }
+        
+        .admin-notes {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #94a3b8;
+            background: #0f172a;
+            padding: 6px 10px;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <button class="settings-trigger" id="settingsBtn" onclick="toggleSettings()" title="Configurações">⚙️</button>
+
+        <div id="mainHeaderGroup">
+            <h1>Chá Revelação/Chá de Fralda</h1>
+            <p class="subtitle" id="panelSubtitle">Painel de Confirmação</p>
+        </div>
+
+        <!-- TELA DINÂMICA DO CONVIDADO -->
+        <div id="guestModeContainer" style="display: none;"></div>
+
+        <!-- TELA DE LOGIN ALTERADA -->
+        <div id="loginPanel" class="modal-panel">
+            <div class="modal-header"><h2>Acessar Painel</h2></div>
+            <form onsubmit="event.preventDefault(); handleLogin();" class="setting-row">
+                <label style="color: #94a3b8; font-size: 12px; font-weight: bold; display: block; margin-bottom: 5px;">E-mail</label>
+                <input type="email" id="emailInput" placeholder="Digite seu e-mail..." style="width:100%; margin-bottom:15px;" required>
+                
+                <label style="color: #94a3b8; font-size: 12px; font-weight: bold; display: block; margin-bottom: 5px;">Senha</label>
+                <div class="password-wrapper">
+                    <input type="password" id="passwordInput" placeholder="Digite sua senha..." required>
+                    <button type="button" class="toggle-password-btn" id="togglePasswordBtn" onclick="togglePasswordVisibility()">👁️</button>
+                </div>
+
+                <label class="remember-me-container">
+                    <input type="checkbox" id="rememberMeCheckbox"> Lembre-me neste dispositivo
+                </label>
+
+                <button type="submit" style="width:100%; margin-top: 5px;">Entrar</button>
+            </form>
+        </div>
+
+        <!-- PORTARIA: SCANNER DE QR CODE -->
+        <div id="scannerPanel" class="modal-panel">
+            <div class="modal-header">
+                <h2>Portaria: Escanear QR</h2>
+                <button onclick="stopScannerAndReturn()" class="action-icon" style="font-size:18px;">✕</button>
+            </div>
+            <div class="setting-row" id="scannerCameraView">
+                <p>Aponte a câmera do celular para o QR Code do convite impresso ou na tela do convidado.</p>
+                <div id="reader"></div>
+            </div>
+            <div class="setting-row" id="scannerResultView" style="display: none;">
+                <div id="scannerResultContent"></div>
+                <button onclick="resumeScanner()" class="success-btn">Escanear Próximo Convidado 📷</button>
+            </div>
+        </div>
+
+        <!-- MENU DE CONFIGURAÇÕES E CONTA -->
+        <div id="settingsPanel" class="modal-panel">
+            <div class="modal-header">
+                <h2>Configurações & Conta</h2>
+                <button onclick="toggleSettings()" class="action-icon" style="font-size:18px;">✕</button>
+            </div>
+
+            <div class="setting-row">
+                <h4>Controle de Portaria (Dia do Evento)</h4>
+                <p>Abra a câmera deste dispositivo para validar a entrada dos convidados lendo os códigos QR.</p>
+                <button class="success-btn" onclick="startScanner()">📷 Modo Portaria (Escanear QR)</button>
+            </div>
+
+            <div class="setting-row">
+                <h4>Convidados Presentes (Liberados)</h4>
+                <p>Lista de pessoas que já passaram pela portaria e tiveram a entrada liberada:</p>
+                <div style="max-height: 180px; overflow-y: auto; background-color: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #334155;" id="allowedGuestsList"></div>
+            </div>
+
+            <div class="setting-row">
+                <h4>Gerenciamento da Conta</h4>
+                <p>Desconecte seu painel para bloquear edições não autorizadas.</p>
+                <button class="danger-btn" onclick="logout()">Sair da Conta (Bloquear)</button>
+            </div>
+
+            <div class="setting-row">
+                <h4>Backup e Segurança</h4>
+                <p>Exporte ou restaure sua lista de convidados para evitar perdas.</p>
+                <button class="secondary-btn" style="width:100%; margin-bottom:8px;" onclick="exportBackup()">Baixar Arquivo de Backup</button>
+                <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importBackup(this)">
+                <button class="secondary-btn" style="width:100%;" onclick="document.getElementById('importFile').click()">Restaurar Backup (.json)</button>
+            </div>
+        </div>
+
+        <!-- PAINEL PRINCIPAL (ADMINISTRADOR) -->
+        <div id="adminPanel" style="display: none;">
+            <div class="input-box">
+                <div class="input-box-header" onclick="toggleFormAccordion()">
+                    <span>➕ Criar Novo Grupo de Convidados</span>
+                    <span id="formArrow">▼</span>
+                </div>
+                <div class="input-box-content" id="formAccordionContent">
+                    <label>Responsável pelo Grupo</label>
+                    <div class="input-group"><input type="text" id="mainGuestInput" placeholder="Nome do responsável..."></div>
+                    
+                    <label>WhatsApp do Responsável (com DDD, apenas números)</label>
+                    <div class="input-group"><input type="tel" id="phoneInput" placeholder="Ex: 11999999999"></div>
+
+                    <label>Acompanhantes (Opcional - separe por vírgula)</label>
+                    <div class="input-group"><input type="text" id="subGuestsInput" placeholder="Ex: Esposa, Filho, Namorada"></div>
+                    
+                    <button onclick="addGroup()" style="width: 100%; margin-top:5px;">Criar Grupo e Salvar</button>
+                </div>
+            </div>
+
+            <ul id="guestList"></ul>
+            <div class="counter" id="guestCounter">
+                <div id="countTotal">No Evento: 0 pessoas presentes</div>
+                <div id="countStatus" style="font-size: 12px; color: #64748b;">Confirmados: 0 | Presentes 🚪: 0 | Recusados: 0</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDqf8kZ-BmKaKQnuUsGyYdnlSu5omeIDbA",
+  authDomain: "cha-revelacao-eh-fralda.firebaseapp.com",
+  projectId: "cha-revelacao-eh-fralda",
+  storageBucket: "cha-revelacao-eh-fralda.firebasestorage.app",
+  messagingSenderId: "255294291135",
+  appId: "1:255294291135:web:bfef8f5cb7c96d597eda0a",
+  measurementId: "G-C16R5P75WB"
+};
+
+        // Inicializa o Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        let groups = [];
+        let isViewSettings = false;
+        let isLoggedIn = false;
+        let html5QrcodeScanner = null;
+        let isFormOpen = false;
+
+        // SENHA PADRÃO OBRIGATÓRIA DO PAINEL (Altere aqui se quiser uma senha customizada)
+        const SENHA_ADMIN_PADRAO = "admin123";
+
+        // DEFINA A SUA CHAVE PIX AQUI
+        const CHAVE_PIX_EXEMPLO = "mimodobebe@seuemail.com"; 
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadGroupsFromStorage();
+            initFirebaseSync();
+            checkRememberedEmail();
+            checkUrlParams();
+        });
+
+        // Sincronização em tempo real com a nuvem do Firebase
+        function initFirebaseSync() {
+            database.ref('groups_cha_revelacao').on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    groups = Object.keys(data).map(key => ({ id: key, ...data[key] }));
+                } else {
+                    groups = [];
+                }
+                localStorage.setItem('groups_cha_revelacao', JSON.stringify(groups));
+                
+                // Recarrega a visualização correta baseado na URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const idGroup = urlParams.get('id');
+                if (idGroup) {
+                    const group = groups.find(g => g.id === idGroup);
+                    if (group) showGuestMode(group);
+                } else {
+                    renderList();
+                    if (isViewSettings) renderAllowedGuests();
+                }
+            });
+        }
+
+        // Função para alternar a exibição da senha
+        function togglePasswordVisibility() {
+            const pwdInput = document.getElementById('passwordInput');
+            const toggleBtn = document.getElementById('togglePasswordBtn');
+            if (pwdInput.type === "password") {
+                pwdInput.type = "text";
+                toggleBtn.textContent = "👀";
+            } else {
+                pwdInput.type = "password";
+                toggleBtn.textContent = "👁️";
+            }
+        }
+
+        // Verifica se existe e-mail salvo para o recurso Lembrar-me
+        function checkRememberedEmail() {
+            const savedEmail = localStorage.getItem('remembered_admin_email');
+            if (savedEmail) {
+                document.getElementById('emailInput').value = savedEmail;
+                document.getElementById('rememberMeCheckbox').checked = true;
+            }
+        }
+
+        function toggleFormAccordion() {
+            const content = document.getElementById('formAccordionContent');
+            const arrow = document.getElementById('formArrow');
+            isFormOpen = !isFormOpen;
+            content.style.display = isFormOpen ? 'block' : 'none';
+            arrow.textContent = isFormOpen ? '▲' : '▼';
+        }
+
+        function toggleGuestAccordion(id, event) {
+            if (event.target.closest('.actions') || event.target.closest('.admin-notes')) return;
+            const subContainer = document.getElementById(`subs-${id}`);
+            if (subContainer) {
+                const isVisible = subContainer.style.display === 'block';
+                subContainer.style.display = isVisible ? 'none' : 'block';
+            }
+        }
+
+        function checkUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const idGroup = urlParams.get('id');
+            if (idGroup) {
+                document.getElementById('settingsBtn').style.display = 'none';
+                const group = groups.find(g => g.id === idGroup);
+                if (group) { showGuestMode(group); } else { alert("Convite não encontrado."); }
+            } else {
+                checkAdminAuth();
+            }
+        }
+
+        function checkAdminAuth() {
+            const sessionActive = sessionStorage.getItem('admin_session') === 'true';
+            if (!sessionActive) { showPanel('loginPanel'); } else { isLoggedIn = true; showPanel('adminPanel'); }
+        }
+
+        function showPanel(panelId) {
+            document.getElementById('adminPanel').style.display = panelId === 'adminPanel' ? 'block' : 'none';
+            document.getElementById('loginPanel').style.display = panelId === 'loginPanel' ? 'block' : 'none';
+            document.getElementById('settingsPanel').style.display = panelId === 'settingsPanel' ? 'block' : 'none';
+            document.getElementById('scannerPanel').style.display = panelId === 'scannerPanel' ? 'block' : 'none';
+            document.getElementById('guestModeContainer').style.display = panelId === 'guestModeContainer' ? 'block' : 'none';
+            if (panelId === 'settingsPanel') renderAllowedGuests();
+        }
+
+        // FUNÇÃO DE LOGIN COM SENHA OBRIGATÓRIA
+        function handleLogin() {
+            const emailInput = document.getElementById('emailInput').value.trim();
+            const pwdInput = document.getElementById('passwordInput').value.trim();
+            const rememberMe = document.getElementById('rememberMeCheckbox').checked;
+
+            if(!emailInput) {
+                return alert("O campo de e-mail é obrigatório.");
+            }
+
+            // Validação estrita: impede campos vazios ou apenas com espaços
+            if(!pwdInput || pwdInput.length === 0) {
+                return alert("A senha é estritamente obrigatória para acessar o painel!");
+            }
+            
+            const savedPassword = localStorage.getItem('admin_pwd') || SENHA_ADMIN_PADRAO;
+            
+            if (pwdInput !== savedPassword) { 
+                return alert("Senha incorreta! Acesso negado."); 
+            }
+
+            // Lógica do Lembrar-me apenas para o e-mail
+            if (rememberMe) {
+                localStorage.setItem('remembered_admin_email', emailInput);
+            } else {
+                localStorage.removeItem('remembered_admin_email');
+            }
+
+            sessionStorage.setItem('admin_session', 'true');
+            isLoggedIn = true;
+            document.getElementById('passwordInput').value = '';
+            
+            // Reseta o input para o tipo password padrão caso tenha sido alterado pelo olho
+            const pwdField = document.getElementById('passwordInput');
+            pwdField.type = "password";
+            document.getElementById('togglePasswordBtn').textContent = "👁️";
+
+            showPanel('adminPanel');
+        }
+
+        function logout() {
+            sessionStorage.removeItem('admin_session');
+            isLoggedIn = false; isViewSettings = false;
+            showPanel('loginPanel');
+        }
+
+        function toggleSettings() {
+            if (!isLoggedIn) return;
+            isViewSettings = !isViewSettings;
+            showPanel(isViewSettings ? 'settingsPanel' : 'adminPanel');
+        }
+
+        function startScanner() {
+            showPanel('scannerPanel');
+            document.getElementById('scannerCameraView').style.display = 'block';
+            document.getElementById('scannerResultView').style.display = 'none';
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            html5QrcodeScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess)
+            .catch(err => { alert("Erro ao abrir a câmera: " + err); stopScannerAndReturn(); });
+        }
+
+        function onScanSuccess(decodedText) {
+            const group = groups.find(g => g.id === decodedText);
+            const resultContent = document.getElementById('scannerResultContent');
+            document.getElementById('scannerCameraView').style.display = 'none';
+            document.getElementById('scannerResultView').style.display = 'block';
+            
+            if (group) {
+                if (group.status === 'recusado') {
+                    resultContent.innerHTML = `<div class="scan-result-card"><span class="scan-result-badge badge-danger">Entrada Recusada ❌</span><h3>${group.main}</h3><p style="color:#94a3b8; font-size:14px;">Informou que não viria ao evento.</p></div>`;
+                    return;
+                }
+                if (group.status === 'liberado') {
+                    let integrantes = `<div class="scan-result-item">• ${group.main}</div>`;
+                    if (group.subs) integrantes += group.subs.map(s => `<div class="scan-result-item">• ${s}</div>`).join('');
+                    resultContent.innerHTML = `<div class="scan-result-card"><span class="scan-result-badge badge-warning">Já Liberado ⚠️</span><h3>${group.main}</h3><div class="scan-result-list">${integrantes}</div></div>`;
+                    return;
+                }
+                group.status = 'liberado';
+                saveToStorage(); renderList();
+                let integrantes = `<div class="scan-result-item">• ${group.main}</div>`;
+                if (group.subs) integrantes += group.subs.map(s => `<div class="scan-result-item">• ${s}</div>`).join('');
+                resultContent.innerHTML = `<div class="scan-result-card"><span class="scan-result-badge badge-success">Entrada Liberada ✅</span><h3>Bem-vindo(a)!</h3><div class="scan-result-list">${integrantes}</div></div>`;
+            } else {
+                resultContent.innerHTML = `<div class="scan-result-card"><span class="scan-result-badge badge-danger">Não Encontrado ✕</span><h3>Código Inválido</h3></div>`;
+            }
+        }
+
+        function resumeScanner() {
+            document.getElementById('scannerResultView').style.display = 'none';
+            document.getElementById('scannerCameraView').style.display = 'block';
+        }
+
+        function stopScannerAndReturn() {
+            if (html5QrcodeScanner) { html5QrcodeScanner.stop().then(() => { html5QrcodeScanner = null; showPanel('settingsPanel'); }).catch(() => showPanel('settingsPanel')); } 
+            else { showPanel('settingsPanel'); }
+        }
+
+        function addGroup() {
+            const mainName = document.getElementById('mainGuestInput').value.trim();
+            const phone = document.getElementById('phoneInput').value.replace(/\D/g, '').trim();
+            const subsText = document.getElementById('subGuestsInput').value.trim();
+            if (!mainName || !phone) return alert('Insira nome e WhatsApp!');
+            const subGuests = subsText ? subsText.split(',').map(s => s.trim()).filter(s => s !== '') : [];
+            
+            const newId = Date.now().toString();
+            const newGroup = { main: mainName, phone: phone, subs: subGuests, status: 'pendente', palpite: '', mensagem: '' };
+            
+            groups.push({ id: newId, ...newGroup });
+            saveToStorage(); renderList();
+            document.getElementById('mainGuestInput').value = '';
+            document.getElementById('phoneInput').value = '';
+            document.getElementById('subGuestsInput').value = '';
+            toggleFormAccordion();
+        }
+
+        function renderList() {
+            const guestList = document.getElementById('guestList');
+            guestList.innerHTML = '';
+            let totalNoEvento = 0, conf = 0, rec = 0, lib = 0;
+
+            groups.forEach(group => {
+                let statusClass = '', statusIcon = '⏳';
+                if (group.status === 'confirmado') { statusClass = 'status-confirmado'; statusIcon = '🔵'; conf++; } 
+                else if (group.status === 'liberado') { statusClass = 'status-liberado'; statusIcon = '✅'; totalNoEvento += 1 + (group.subs ? group.subs.length : 0); lib++; } 
+                else if (group.status === 'recusado') { statusClass = 'status-recusado'; statusIcon = '❌'; rec++; }
+
+                const li = document.createElement('li');
+                li.className = `group-card ${statusClass}`;
+                li.setAttribute('onclick', `toggleGuestAccordion('${group.id}', event)`);
+                
+                let extraInfo = '';
+                if(group.palpite || group.mensagem) {
+                    extraInfo += `<div class="admin-notes">`;
+                    if(group.palpite) extraInfo += `<div><b>Palpite:</b> ${group.palpite}</div>`;
+                    if(group.mensagem) extraInfo += `<div><b>Recado:</b> "${group.mensagem}"</div>`;
+                    extraInfo += `</div>`;
+                }
+
+                let subsHtml = `<div class="sub-guests" id="subs-${group.id}">`;
+                if(group.subs && group.subs.length > 0) subsHtml += group.subs.map(s => `<div>• ${s}</div>`).join('');
+                subsHtml += extraInfo + `</div>`;
+
+                li.innerHTML = `
+                    <div class="group-header">
+                        <span>${statusIcon} ${group.main} (${1 + (group.subs ? group.subs.length : 0)})</span>
+                        <div class="actions">
+                            <button class="action-icon whatsapp-icon" onclick="sendWhatsAppInvite('${group.id}')">💬</button>
+                            <button class="action-icon" onclick="copyInviteLink('${group.id}')">🔗</button>
+                            <button class="action-icon delete-icon" onclick="deleteGroup('${group.id}')">✕</button>
+                        </div>
+                    </div>
+                    ${subsHtml}
+                `;
+                guestList.appendChild(li);
+            });
+            document.getElementById('countTotal').textContent = `No Evento: ${totalNoEvento} pessoas presentes`;
+            document.getElementById('countStatus').textContent = `Confirmados: ${conf} | Presentes 🚪: ${lib} | Recusados: ${rec}`;
+        }
+
+        function renderAllowedGuests() {
+            const container = document.getElementById('allowedGuestsList');
+            const allowedGroups = groups.filter(g => g.status === 'liberado');
+            if (allowedGroups.length === 0) { container.innerHTML = `<p style="margin:0; color:#64748b; font-size:13px; text-align:center;">Nenhum convidado liberado ainda.</p>`; return; }
+            let html = '';
+            allowedGroups.forEach(group => {
+                let nomes = `<b>${group.main}</b>`;
+                if (group.subs && group.subs.length > 0) nomes += ` (+ ${group.subs.join(', ')})`;
+                html += `<div style="color: #22c55e; font-size:13px; margin-bottom:6px; border-bottom: 1px dashed #334155; padding-bottom: 4px;">✅ ${nomes}</div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        function deleteGroup(id) { 
+            if(confirm("Excluir este grupo?")) { 
+                database.ref('groups_cha_revelacao/' + id).remove();
+            } 
+        }
+        function generateLink(id) { return `${window.location.origin}${window.location.pathname}?id=${id}`; }
+        function copyInviteLink(id) { navigator.clipboard.writeText(generateLink(id)).then(() => alert("Link copied!")); }
+        function sendWhatsAppInvite(id) {
+            const group = groups.find(g => g.id === id); if (!group) return;
+            const mensagem = `Olá ${group.main}! ✨ Confirme sua presença no nosso Chá Revelação clicando no link:\n\n${generateLink(id)}`;
+            window.open(`https://api.whatsapp.com/send?phone=55${group.phone}&text=${encodeURIComponent(mensagem)}`, '_blank');
+        }
+
+        // TELA DO CONVIDADO
+        function showGuestMode(group) {
+            showPanel('guestModeContainer');
+            const container = document.getElementById('guestModeContainer');
+
+            if (group.status === 'confirmado' || group.status === 'liberado') {
+                container.innerHTML = `
+                    <div class="guest-mode-box" style="text-align:center;">
+                        <h3 style="margin-top:0; color:#22c55e;">Presença Confirmada! 🎉</h3>
+                        <p>Obrigado, <b>${group.main}</b>. Apresente o QR Code abaixo na entrada do evento:</p>
+                        <div class="qr-display-container"><div id="qrcode"></div></div>
+                        <p style="font-size:12px; color:#94a3b8;">Dica: Tire um print desta tela.</p>
+                        <p style="font-size: 13px; color: #94a3b8; margin-top:25px;">Precisa mudar a resposta?</p>
+                        <button class="btn-decline" style="width:100%;" onclick="atualizarStatusConvidado('${group.id}', 'recusado')">Não poderei ir</button>
+                    </div>
+                `;
+                new QRCode(document.getElementById("qrcode"), { text: group.id, width: 150, height: 150 });
+
+            } else if (group.status === 'recusado') {
+                container.innerHTML = `
+                    <div class="guest-mode-box" style="text-align:center;">
+                        <h3 style="margin-top:0; color:#ef4444;">Ausência Informada 🤍</h3>
+                        <p>Poxa, que pena que não poderá ir. Obrigado por nos avisar!</p>
+                        
+                        <!-- BLOCO PIX -->
+                        <div class="absence-section">
+                            <h4>🎁 Mimo do Bebê (Pix)</h4>
+                            <p>Uma alternativa moderna para quem prefere ajudar com as fraldas de forma direta de onde estiver.</p>
+                            <div style="font-size: 13px; color: #cbd5e1; margin-bottom: 8px; text-align: left; line-height: 1.4;">
+                                <div><b>Nome:</b> JOAO PEDRO RODRIGUES DA SILVA</div>
+                                <div><b>Banco:</b> BCO C6 S.A.</div>
+                            </div>
+                            <div class="pix-container">
+                                <span class="pix-key" id="pixKeyText">${CHAVE_PIX_EXEMPLO}</span>
+                                <button onclick="copyPixKey()" style="padding: 6px 12px; font-size:12px;">Copiar</button>
+                            </div>
+                        </div>
+
+                        <!-- PALPITE DO CHÁ -->
+                        <div class="absence-section">
+                            <h4>👶 Mesmo de longe, qual seu palpite?</h4>
+                            <div class="vote-container">
+                                <button class="vote-btn ${group.palpite === 'Menino' ? 'selected-menino' : ''}" onclick="savePalpite('${group.id}', 'Menino')">👦 Menino</button>
+                                <button class="vote-btn ${group.palpite === 'Menina' ? 'selected-menina' : ''}" onclick="savePalpite('${group.id}', 'Menina')">👧 Menina</button>
+                            </div>
+                        </div>
+
+                        <!-- MURAL DE RECADOS -->
+                        <div class="absence-section">
+                            <h4>✍️ Deixe uma Mensagem de Carinho</h4>
+                            <textarea id="guestMessage" rows="3" placeholder="Escreva seus votos para o bebê ou conselhos para os pais..." style="margin-bottom:8px;">${group.mensagem || ''}</textarea>
+                            <button onclick="saveMessage('${group.id}')" class="success-btn" style="padding:8px; font-size:13px;">Salvar Mensagem</button>
+                        </div>
+
+                        <!-- REVERSÃO DE PRESENÇA -->
+                        <div style="margin-top:30px; border-top: 1px solid #334155; padding-top:20px;">
+                            <p style="font-size: 14px; color: #cbd5e1; margin-bottom:10px;">Mudou de ideia?</p>
+                            <button class="btn-confirm" style="width:100%; padding:12px;" onclick="atualizarStatusConvidado('${group.id}', 'confirmado')">👍 Quero confirmar minha presença</button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="guest-mode-box">
+                        <h3 style="text-align:center; margin-top:0;">Olá, ${group.main}! 👋</h3>
+                        <p style="text-align:center; font-size: 14px; color:#94a3b8;">Você irá ao nosso Chá Revelação?</p>
+                        <div style="background:#1e293b; padding:12px; border-radius:8px; margin-bottom:15px;">
+                            <span style="font-size:12px; color:#94a3b8; display:block; font-weight:bold;">Grupo de:</span>
+                            <strong style="color:#f8fafc; font-size:16px;">• ${group.main}</strong>
+                            ${group.subs ? group.subs.map(s => `<div style="color:#cbd5e1; font-size:14px; margin-left:10px;">• ${s}</div>`).join('') : ''}
+                        </div>
+                        <div class="btn-container">
+                            <button class="btn-confirm" onclick="atualizarStatusConvidado('${group.id}', 'confirmado')">Sim, vou! 👍</button>
+                            <button class="btn-decline" onclick="atualizarStatusConvidado('${group.id}', 'recusado')">Não vou 👎</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function actualizarStatusConvidado(id, novoStatus) {
+            const index = groups.findIndex(g => g.id === id);
+            if (index !== -1) {
+                groups[index].status = novoStatus;
+                saveToStorage(groups[index]);
+                showGuestMode(groups[index]);
+            }
+        }
+
+        function savePalpite(id, escolha) {
+            const index = groups.findIndex(g => g.id === id);
+            if (index !== -1) {
+                groups[index].palpite = escolha;
+                saveToStorage(groups[index]);
+                showGuestMode(groups[index]);
+            }
+        }
+
+        function saveMessage(id) {
+            const msg = document.getElementById('guestMessage').value.trim();
+            const index = groups.findIndex(g => g.id === id);
+            if (index !== -1) {
+                groups[index].mensagem = msg;
+                saveToStorage(groups[index]);
+                alert("Mensagem salva com carinho! ❤️");
+                showGuestMode(groups[index]);
+            }
+        }
+
+        function copyPixKey() {
+            navigator.clipboard.writeText(CHAVE_PIX_EXEMPLO).then(() => alert("Chave Pix copiada com sucesso!"));
+        }
+
+        function exportBackup() {
+            if(groups.length === 0) return alert("Lista vazia!");
+            const blob = new Blob([JSON.stringify(groups, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `backup_convidados_${Date.now()}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+
+        function importBackup(input) {
+            const file = input.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (Array.isArray(importedData)) {
+                        importedData.forEach(g => {
+                            const id = g.id;
+                            const dataCopy = { ...g };
+                            delete dataCopy.id;
+                            database.ref('groups_cha_revelacao/' + id).set(dataCopy);
+                        });
+                        alert("Backup restaurado e enviado para a nuvem!"); toggleSettings();
+                    }
+                } catch (err) { alert("Erro no arquivo."); }
+            };
+            reader.readAsText(file); input.value = '';
+        }
+
+        // Salva localmente e espelha na nuvem do Firebase
+        function saveToStorage(specificGroup = null) { 
+            localStorage.setItem('groups_cha_revelacao', JSON.stringify(groups)); 
+            if (specificGroup) {
+                const dataCopy = { ...specificGroup };
+                const id = dataCopy.id;
+                delete dataCopy.id;
+                database.ref('groups_cha_revelacao/' + id).set(dataCopy);
+            } else if (groups.length > 0) {
+                const lastGroup = groups[groups.length - 1];
+                const dataCopy = { ...lastGroup };
+                const id = dataCopy.id;
+                delete dataCopy.id;
+                database.ref('groups_cha_revelacao/' + id).set(dataCopy);
+            }
+        }
+        
+        function loadGroupsFromStorage() {
+            const stored = localStorage.getItem('groups_cha_revelacao');
+            if (stored) groups = JSON.parse(stored);
+            renderList();
+        }
+    </script>
+</body>
+</html>
