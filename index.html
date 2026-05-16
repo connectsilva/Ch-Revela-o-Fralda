@@ -8,8 +8,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- Biblioteca para ler QR Code pela Câmera -->
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <!-- SDKs do Firebase (App e Realtime Database) -->
+    <!-- SDKs do Firebase (App, Auth e Realtime Database) -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <style>
         body {
@@ -247,7 +248,6 @@
         .setting-row h4 { margin: 0 0 5px 0; color: #f8fafc; }
         .setting-row p { margin: 0 0 12px 0; color: #94a3b8; font-size: 13px; }
 
-        /* Estilos da senha com botão de olho */
         .password-wrapper {
             position: relative;
             display: flex;
@@ -268,7 +268,6 @@
             padding: 5px;
         }
 
-        /* Estilo do container Lembrar-me */
         .remember-me-container {
             display: flex;
             align-items: center;
@@ -355,7 +354,6 @@
         }
         .scan-result-item { color: #cbd5e1; font-size: 15px; margin-bottom: 6px; }
 
-        /* Estilos específicos para os novos blocos de Ausência */
         .absence-section {
             background: #1e293b;
             border: 1px solid #334155;
@@ -406,7 +404,7 @@
 <body>
 
     <div class="container">
-        <button class="settings-trigger" id="settingsBtn" onclick="toggleSettings()" title="Configurações">⚙️</button>
+        <button class="settings-trigger" id="settingsBtn" onclick="toggleSettings()" title="Configurações" style="display:none;">⚙️</button>
 
         <div id="mainHeaderGroup">
             <h1>Chá Revelação/Chá de Fralda</h1>
@@ -416,12 +414,12 @@
         <!-- TELA DINÂMICA DO CONVIDADO -->
         <div id="guestModeContainer" style="display: none;"></div>
 
-        <!-- TELA DE LOGIN ALTERADA -->
+        <!-- TELA DE LOGIN INTEGRADA AO FIREBASE AUTH -->
         <div id="loginPanel" class="modal-panel">
             <div class="modal-header"><h2>Acessar Painel</h2></div>
             <form onsubmit="event.preventDefault(); handleLogin();" class="setting-row">
                 <label style="color: #94a3b8; font-size: 12px; font-weight: bold; display: block; margin-bottom: 5px;">E-mail</label>
-                <input type="email" id="emailInput" placeholder="Digite seu e-mail..." style="width:100%; margin-bottom:15px;" required>
+                <input type="email" id="emailInput" placeholder="Digite o e-mail cadastrado no Firebase..." style="width:100%; margin-bottom:15px;" required>
                 
                 <label style="color: #94a3b8; font-size: 12px; font-weight: bold; display: block; margin-bottom: 5px;">Senha</label>
                 <div class="password-wrapper">
@@ -532,23 +530,42 @@ const firebaseConfig = {
         // Inicializa o Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
+        const auth = firebase.auth();
 
         let groups = [];
         let isViewSettings = false;
-        let isLoggedIn = false;
         let html5QrcodeScanner = null;
         let isFormOpen = false;
 
-        // SENHA PADRÃO OBRIGATÓRIA DO PAINEL (Altere aqui se quiser uma senha customizada)
-        const SENHA_ADMIN_PADRAO = "admin123";
-
         // DEFINA A SUA CHAVE PIX AQUI
-        const CHAVE_PIX_EXEMPLO = "mimodobebe@seuemail.com"; 
+        const CHAVE_PIX_EXEMPLO = "61994138107"; 
 
         document.addEventListener('DOMContentLoaded', () => {
             loadGroupsFromStorage();
             initFirebaseSync();
             checkRememberedEmail();
+            
+            // Monitor real de login do Firebase
+            auth.onAuthStateChanged((user) => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const idGroup = urlParams.get('id');
+                
+                if (idGroup) {
+                    // Modo Convidado: oculta botão de configurações
+                    document.getElementById('settingsBtn').style.display = 'none';
+                } else {
+                    if (user) {
+                        // Logado com sucesso no Firebase
+                        document.getElementById('settingsBtn').style.display = 'block';
+                        showPanel('adminPanel');
+                    } else {
+                        // Deslogado
+                        document.getElementById('settingsBtn').style.display = 'none';
+                        showPanel('loginPanel');
+                    }
+                }
+            });
+
             checkUrlParams();
         });
 
@@ -563,7 +580,6 @@ const firebaseConfig = {
                 }
                 localStorage.setItem('groups_cha_revelacao', JSON.stringify(groups));
                 
-                // Recarrega a visualização correta baseado na URL
                 const urlParams = new URLSearchParams(window.location.search);
                 const idGroup = urlParams.get('id');
                 if (idGroup) {
@@ -576,7 +592,6 @@ const firebaseConfig = {
             });
         }
 
-        // Função para alternar a exibição da senha
         function togglePasswordVisibility() {
             const pwdInput = document.getElementById('passwordInput');
             const toggleBtn = document.getElementById('togglePasswordBtn');
@@ -589,7 +604,6 @@ const firebaseConfig = {
             }
         }
 
-        // Verifica se existe e-mail salvo para o recurso Lembrar-me
         function checkRememberedEmail() {
             const savedEmail = localStorage.getItem('remembered_admin_email');
             if (savedEmail) {
@@ -622,14 +636,7 @@ const firebaseConfig = {
                 document.getElementById('settingsBtn').style.display = 'none';
                 const group = groups.find(g => g.id === idGroup);
                 if (group) { showGuestMode(group); } else { alert("Convite não encontrado."); }
-            } else {
-                checkAdminAuth();
             }
-        }
-
-        function checkAdminAuth() {
-            const sessionActive = sessionStorage.getItem('admin_session') === 'true';
-            if (!sessionActive) { showPanel('loginPanel'); } else { isLoggedIn = true; showPanel('adminPanel'); }
         }
 
         function showPanel(panelId) {
@@ -641,54 +648,40 @@ const firebaseConfig = {
             if (panelId === 'settingsPanel') renderAllowedGuests();
         }
 
-        // FUNÇÃO DE LOGIN COM SENHA OBRIGATÓRIA
+        // NOVO LOGIN TOTALMENTE INTEGRADO AO FIREBASE AUTHENTICATION
         function handleLogin() {
             const emailInput = document.getElementById('emailInput').value.trim();
             const pwdInput = document.getElementById('passwordInput').value.trim();
             const rememberMe = document.getElementById('rememberMeCheckbox').checked;
 
-            if(!emailInput) {
-                return alert("O campo de e-mail é obrigatório.");
-            }
-
-            // Validação estrita: impede campos vazios ou apenas com espaços
-            if(!pwdInput || pwdInput.length === 0) {
-                return alert("A senha é estritamente obrigatória para acessar o painel!");
-            }
-            
-            const savedPassword = localStorage.getItem('admin_pwd') || SENHA_ADMIN_PADRAO;
-            
-            if (pwdInput !== savedPassword) { 
-                return alert("Senha incorreta! Acesso negado."); 
-            }
-
-            // Lógica do Lembrar-me apenas para o e-mail
-            if (rememberMe) {
-                localStorage.setItem('remembered_admin_email', emailInput);
-            } else {
-                localStorage.removeItem('remembered_admin_email');
-            }
-
-            sessionStorage.setItem('admin_session', 'true');
-            isLoggedIn = true;
-            document.getElementById('passwordInput').value = '';
-            
-            // Reseta o input para o tipo password padrão caso tenha sido alterado pelo olho
-            const pwdField = document.getElementById('passwordInput');
-            pwdField.type = "password";
-            document.getElementById('togglePasswordBtn').textContent = "👁️";
-
-            showPanel('adminPanel');
+            // Faz a autenticação direta nos servidores do Firebase
+            auth.signInWithEmailAndPassword(emailInput, pwdInput)
+                .then((userCredential) => {
+                    if (rememberMe) {
+                        localStorage.setItem('remembered_admin_email', emailInput);
+                    } else {
+                        localStorage.removeItem('remembered_admin_email');
+                    }
+                    document.getElementById('passwordInput').value = '';
+                    // Reseta o olho da senha
+                    const pwdField = document.getElementById('passwordInput');
+                    pwdField.type = "password";
+                    document.getElementById('togglePasswordBtn').textContent = "👁️";
+                })
+                .catch((error) => {
+                    alert("Erro ao acessar: " + error.message);
+                });
         }
 
         function logout() {
-            sessionStorage.removeItem('admin_session');
-            isLoggedIn = false; isViewSettings = false;
-            showPanel('loginPanel');
+            auth.signOut().then(() => {
+                isViewSettings = false;
+                showPanel('loginPanel');
+            });
         }
 
         function toggleSettings() {
-            if (!isLoggedIn) return;
+            if (!auth.currentUser) return;
             isViewSettings = !isViewSettings;
             showPanel(isViewSettings ? 'settingsPanel' : 'adminPanel');
         }
@@ -720,7 +713,7 @@ const firebaseConfig = {
                     return;
                 }
                 group.status = 'liberado';
-                saveToStorage(); renderList();
+                saveToStorage(group); renderList();
                 let integrantes = `<div class="scan-result-item">• ${group.main}</div>`;
                 if (group.subs) integrantes += group.subs.map(s => `<div class="scan-result-item">• ${s}</div>`).join('');
                 resultContent.innerHTML = `<div class="scan-result-card"><span class="scan-result-badge badge-success">Entrada Liberada ✅</span><h3>Bem-vindo(a)!</h3><div class="scan-result-list">${integrantes}</div></div>`;
@@ -749,8 +742,9 @@ const firebaseConfig = {
             const newId = Date.now().toString();
             const newGroup = { main: mainName, phone: phone, subs: subGuests, status: 'pendente', palpite: '', mensagem: '' };
             
-            groups.push({ id: newId, ...newGroup });
-            saveToStorage(); renderList();
+            const addedGroup = { id: newId, ...newGroup };
+            groups.push(addedGroup);
+            saveToStorage(addedGroup); renderList();
             document.getElementById('mainGuestInput').value = '';
             document.getElementById('phoneInput').value = '';
             document.getElementById('subGuestsInput').value = '';
@@ -820,7 +814,7 @@ const firebaseConfig = {
             } 
         }
         function generateLink(id) { return `${window.location.origin}${window.location.pathname}?id=${id}`; }
-        function copyInviteLink(id) { navigator.clipboard.writeText(generateLink(id)).then(() => alert("Link copied!")); }
+        function copyInviteLink(id) { navigator.clipboard.writeText(generateLink(id)).then(() => alert("Link copiado!")); }
         function sendWhatsAppInvite(id) {
             const group = groups.find(g => g.id === id); if (!group) return;
             const mensagem = `Olá ${group.main}! ✨ Confirme sua presença no nosso Chá Revelação clicando no link:\n\n${generateLink(id)}`;
@@ -907,7 +901,7 @@ const firebaseConfig = {
             }
         }
 
-        function actualizarStatusConvidado(id, novoStatus) {
+        function atualizarStatusConvidado(id, novoStatus) {
             const index = groups.findIndex(g => g.id === id);
             if (index !== -1) {
                 groups[index].status = novoStatus;
@@ -973,12 +967,6 @@ const firebaseConfig = {
             localStorage.setItem('groups_cha_revelacao', JSON.stringify(groups)); 
             if (specificGroup) {
                 const dataCopy = { ...specificGroup };
-                const id = dataCopy.id;
-                delete dataCopy.id;
-                database.ref('groups_cha_revelacao/' + id).set(dataCopy);
-            } else if (groups.length > 0) {
-                const lastGroup = groups[groups.length - 1];
-                const dataCopy = { ...lastGroup };
                 const id = dataCopy.id;
                 delete dataCopy.id;
                 database.ref('groups_cha_revelacao/' + id).set(dataCopy);
