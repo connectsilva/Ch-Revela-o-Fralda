@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Convidados - Chá Revelação</title>
+    <title>Lfunction atualizarStatusConvidado(id, novoStatus)ista de Convidados - Chá Revelação</title>
     <!-- Biblioteca para gerar QR Code -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- Biblioteca para ler QR Code pela Câmera -->
@@ -539,6 +539,14 @@ const firebaseConfig = {
 
         // DEFINA A SUA CHAVE PIX AQUI
         const CHAVE_PIX_EXEMPLO = "61994138107"; 
+// DATA LIMITE PARA CONFIRMAÇÃO
+const DATA_LIMITE_CONFIRMACAO = "2026-06-08T23:59:59";
+
+// Permite apenas 1 confirmação oficial
+// Após a data limite ainda aceita, mas marca como atrasado
+function verificarConfirmacaoAtrasada() {
+    return new Date() > new Date(DATA_LIMITE_CONFIRMACAO);
+}
 
         document.addEventListener('DOMContentLoaded', () => {
             loadGroupsFromStorage();
@@ -768,6 +776,13 @@ const firebaseConfig = {
                 
                 let extraInfo = '';
                 if(group.palpite || group.mensagem) {
+if(group.confirmacaoAtrasada) {
+    extraInfo += `
+        <div class="admin-notes" style="color:#facc15; border:1px solid #facc15; margin-top:6px;">
+            ⚠️ Confirmação realizada após o prazo limite
+        </div>
+    `;
+}
                     extraInfo += `<div class="admin-notes">`;
                     if(group.palpite) extraInfo += `<div><b>Palpite:</b> ${group.palpite}</div>`;
                     if(group.mensagem) extraInfo += `<div><b>Recado:</b> "${group.mensagem}"</div>`;
@@ -904,6 +919,12 @@ Contamos com sua presença para celebrar esse momento tão especial conosco! �
                 container.innerHTML = `
                     <div class="guest-mode-box">
                         <h3 style="text-align:center; margin-top:0;">Olá, ${group.main}! 👋</h3>
+${verificarConfirmacaoAtrasada() ? `
+<div style="background:#78350f; border:1px solid #facc15; color:#fde68a; padding:10px; border-radius:8px; margin-bottom:15px; font-size:13px;">
+⚠️ O prazo oficial de confirmação já terminou.<br>
+Sua resposta ainda será aceita, porém ficará marcada como confirmação fora do prazo.
+</div>
+` : ''}
                         <p style="text-align:center; font-size: 14px; color:#94a3b8;">Você irá ao nosso Chá Revelação?</p>
                         <div style="background:#1e293b; padding:12px; border-radius:8px; margin-bottom:15px;">
                             <span style="font-size:12px; color:#94a3b8; display:block; font-weight:bold;">Grupo de:</span>
@@ -919,7 +940,33 @@ Contamos com sua presença para celebrar esse momento tão especial conosco! �
             }
         }
 
-        function atualizarStatusConvidado(id, novoStatus) {
+         function atualizarStatusConvidado(id, novoStatus) {
+    const index = groups.findIndex(g => g.id === id);
+
+    if (index !== -1) {
+
+        // Impede múltiplas alterações depois da primeira confirmação
+        if (
+            groups[index].respostaFinalizada &&
+            groups[index].status !== novoStatus
+        ) {
+            return alert("Você já confirmou sua resposta anteriormente.");
+        }
+
+        groups[index].status = novoStatus;
+
+        // Marca como resposta final
+        groups[index].respostaFinalizada = true;
+
+        // Marca confirmação atrasada
+        if (verificarConfirmacaoAtrasada()) {
+            groups[index].confirmacaoAtrasada = true;
+        }
+
+        saveToStorage(groups[index]);
+        showGuestMode(groups[index]);
+    }
+}
             const index = groups.findIndex(g => g.id === id);
             if (index !== -1) {
                 groups[index].status = novoStatus;
