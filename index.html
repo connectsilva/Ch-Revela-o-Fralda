@@ -815,12 +815,30 @@ const firebaseConfig = {
         }
         function generateLink(id) { return `${window.location.origin}${window.location.pathname}?id=${id}`; }
         function copyInviteLink(id) { navigator.clipboard.writeText(generateLink(id)).then(() => alert("Link copiado!")); }
-        function sendWhatsAppInvite(id) {
-            const group = groups.find(g => g.id === id); if (!group) return;
-            const mensagem = `Olá ${group.main}! ✨ Confirme sua presença no nosso Chá Revelação clicando no link:\n\n${generateLink(id)}`;
-            window.open(`https://api.whatsapp.com/send?phone=55${group.phone}&text=${encodeURIComponent(mensagem)}`, '_blank');
-        }
+   function sendWhatsAppInvite(id) {
+    const group = groups.find(g => g.id === id);
+    if (!group) return;
 
+    const mensagem = `Olá ${group.main}! ✨💙
+
+Você está convidado(a) para o nosso Chá Revelação 🎉👶
+
+📅 Data: 21/06/2026
+⏰ Horário: das 10:00 às 14:00
+
+📍 Localização:
+https://maps.app.goo.gl/p5LjJXs9Sr67mn9w8?g_st=ac
+
+✅ Confirme sua presença até o dia 08/06/2026 clicando no link abaixo:
+${generateLink(id)}
+
+⚠️ Aviso Importante:
+É proibida a entrada com qualquer bebida alcoólica e drogas no evento.
+
+Contamos com sua presença para celebrar esse momento tão especial conosco! 💖`;
+
+    window.open(`https://api.whatsapp.com/send?phone=55${group.phone}&text=${encodeURIComponent(mensagem)}`, '_blank');
+}
         // TELA DO CONVIDADO
         function showGuestMode(group) {
             showPanel('guestModeContainer');
@@ -980,4 +998,4 @@ const firebaseConfig = {
         }
     </script>
 </body>
-</html>
+</html>html>
